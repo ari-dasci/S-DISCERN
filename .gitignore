@@ -1,0 +1,42 @@
+# Only the code (src/, tests/), the launchers (scripts/), the licence and the environment
+# files are published. Everything else in the root (data, models, results,
+# figures, notes, logs and the working .sh scripts) stays local.
+/*
+!/.gitignore
+!/README.md
+!/requirements.txt
+!/env.yml
+!/LICENSE
+!/src/
+!/tests/
+!/scripts/
+
+__pycache__/
+*.pyc
+
+# src: exploratory scripts that produce none of the published results
+/src/analysis/analyze_distributional_overlap.py
+/src/analysis/analyze_hparam_study_icu.py
+/src/analysis/compare_parametric_full.py
+/src/analysis/diagnose_parametric_scale.py
+/src/analysis/kent_chart_cv.py
+/src/analysis/kent_curvature.py
+/src/analysis/reviewer_selection_sensitivity.py
+/src/analysis/selected_distributional.py
+/src/analysis/summarize_all_distributions.py
+/src/analysis/summarize_parametric_selection.py
+/src/analysis/test_norm_direction_independence.py
+/src/collect/compute_ICU_distributional_overlap.py
+/src/models/ContinualModel.py
+/src/plots/plot_ICU_results.py
+/src/plots/plot_distributions_R3.py
+/src/training/secundary_extractor.py
+/src/unlearning/main_unlearning_ICU_switch.py
+/src/analysis/slurm_times/
+
+# tests of components the published method does not use
+/tests/test_inverse_generator_preembeddings.py
+/tests/test_inverse_generator_real_models.py
+/tests/test_inverse_sequential.py
+/tests/test_kent_charts.py
+/tests/test_preembeddings.py

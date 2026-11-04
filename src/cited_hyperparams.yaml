@@ -1,0 +1,572 @@
+# =============================================================================
+# CITED HYPERPARAMETERS — Best settings from original papers & repositories
+# =============================================================================
+#
+# This file documents the recommended hyperparameters for each unlearning
+# method as reported in the original papers and their official code.
+#
+# Organisation:
+#   method_name:
+#     paper: "citation"
+#     repo: "url"
+#     notes: "general notes"
+#     general:          <-- shared/default hyperparameters
+#     per_setting:      <-- architecture × dataset specific overrides
+#
+# Architectures in this project: resnet18, vit_b_16, efficientnet_v2_s
+# Datasets in this project:      CIFAR10, CIFAR100, MNIST, DTD, LETTERS
+#
+# ⚠  Values labelled "(default)" come from the code defaults; values labelled
+#    "(paper)" come from the publication's reported experiments.
+# =============================================================================
+
+
+# ---------------------------------------------------------------------------
+# 1. RETRAIN  (Gold Standard — Train from scratch without forget data)
+# ---------------------------------------------------------------------------
+RETRAIN:
+  paper: "Baseline — full retraining on the retain set"
+  notes: >
+    No method-specific hyperparameters.  Uses the same training schedule
+    (optimizer, lr, epochs, batch_size) as the original model training.
+  general:
+    optimizer: "Adam or SGD (same as original training)"
+    lr: "Same as original training"
+    epochs: "Same as original training"
+
+
+# ---------------------------------------------------------------------------
+# 2. EWC  (Elastic Weight Consolidation)
+# ---------------------------------------------------------------------------
+EWC:
+  paper: "Kirkpatrick et al., 'Overcoming catastrophic forgetting in neural networks', PNAS 2017"
+  notes: >
+    Penalises changes to parameters important for the retain task via a
+    Fisher-information-weighted L2 penalty.  lambda controls the strength
+    of the penalty.
+  general:
+    lambda: 1.0
+    coefficients: "FISHER"          # or "MAS"
+    loss_type: "confidence_penalty"
+    optimizer: "AdamW"
+  per_setting:
+    # EWC is architecture-agnostic; lambda may need tuning per task.
+    resnet18_CIFAR10:
+      lambda: 1.0
+    resnet18_CIFAR100:
+      lambda: 1.0
+    vit_b_16_CIFAR10:
+      lambda: 1.0
+    vit_b_16_CIFAR100:
+      lambda: 1.0
+
+
+# ---------------------------------------------------------------------------
+# 3. SSD  (Selective Synaptic Dampening)
+# ---------------------------------------------------------------------------
+SSD:
+  paper: "Foster et al., 'Fast Machine Unlearning Without Retraining Through Selective Synaptic Dampening', AAAI 2024"
+  repo: "https://github.com/if-loops/selective-synaptic-dampening"
+  notes: >
+    One-shot method: scales down parameters important for forget data using
+    Fisher information.  dampening_constant (lambda) and selection_weighting
+    (alpha) are the key hyperparameters.
+  general:
+    dampening_constant: 1.0     # lambda — overall dampening strength
+    selection_weighting: 10.0   # alpha — how aggressively to select params
+    conservative: "FISHER"      # or "MAS"
+    # Internal fixed values:
+    forget_threshold: 1.0
+    exponent: 1.0
+    lower_bound: 1.0
+
+
+# ---------------------------------------------------------------------------
+# 4. DELETE  (Fine-tune on retain set)
+# ---------------------------------------------------------------------------
+DELETE:
+  paper: "Fine-tuning baseline — continue training on retain data only"
+  notes: >
+    Simple fine-tuning on the retain set. The 'freeze' option controls
+    which parts of the network are frozen during fine-tuning.
+  general:
+    freeze: "nofreeze"          # "freeze" | "embs" | "nofreeze"
+    optimizer: "AdamW"
+    lr: "Inherited from main training config"
+
+
+# ---------------------------------------------------------------------------
+# 5. NOISY  (Noisy/Synthetic Labels)
+# ---------------------------------------------------------------------------
+NOISY:
+  paper: "Internal method — noisy label substitution on forget set"
+  notes: >
+    Replaces forget-set labels with synthetic/centroid-based targets
+    and fine-tunes.  Many sub-options control centroid computation,
+    covariance estimation, and PCA projection.
+  general:
+    loss_type: "confidence_penalty"
+    covariance_type: "full"       # "full" | "diagonal" | "lasso" | "ledoit_wolf"
+    n_pca_components: null        # null = no PCA
+    syntetic_samples: -1          # -1 = use all
+    fixed_syntetic: false
+    update_syntetic: false
+    update_centroids: false
+    calculate_covariance: false
+
+
+# ---------------------------------------------------------------------------
+# 6. DISTRIBUTIONAL
+# ---------------------------------------------------------------------------
+DISTRIBUTIONAL:
+  paper: "Internal method — distributional approach with BIC/AIC model selection"
+  notes: >
+    Extends NOISY with GMM/distributional modelling and information-criterion
+    based model selection.
+  general:
+    information_criterion: "bic"  # "bic" | "aic" | "aicc"
+    # + All NOISY parameters apply
+
+
+# ---------------------------------------------------------------------------
+# 7. SCAR
+# ---------------------------------------------------------------------------
+SCAR:
+  paper: "Internal method — Selective Confidence and Retention"
+  notes: >
+    Combines confidence-based unlearning with knowledge-retention losses.
+  general:
+    temperature: 1.0
+    lambda_1: 1.0
+    lambda_2: 5.0
+    gamma1: 5.0
+    gamma2: 5.0
+    delta: 5.0
+    num_retain_samples: 5
+    scar_mode: "HR"
+
+
+# ---------------------------------------------------------------------------
+# 8. BADTEACHER  (Incompetent Teacher)
+# ---------------------------------------------------------------------------
+BADTEACHER:
+  paper: "Chundawat et al., 'Can Bad Teaching Induce Forgetting? Unlearning in Deep Networks using an Incompetent Teacher', AAAI 2023"
+  repo: "https://github.com/vikram2000b/bad-teaching-unlearning"
+  notes: >
+    KD-based method: student learns from an incompetent (random-init)
+    teacher on forget data and from the full teacher on retain data.
+    KL_temperature controls softness of the probability distribution.
+  general:
+    KL_temperature: 1.0           # (paper)
+    optimizer: "Adam"
+    lr: 0.0001                    # (paper — from notebook)
+    epochs: 1                     # (paper — single epoch suffices)
+    batch_size: 256               # (paper)
+  per_setting:
+    # Tested on ResNet18 and AllCNN with CIFAR-Super20 (CIFAR-100 grouped)
+    resnet18_CIFAR10:
+      KL_temperature: 1.0
+      lr: 0.0001
+      epochs: 1
+    resnet18_CIFAR100:
+      KL_temperature: 1.0
+      lr: 0.0001
+      epochs: 1
+    vit_b_16_CIFAR10:
+      KL_temperature: 1.0
+      lr: 0.0001
+      epochs: 1
+    vit_b_16_CIFAR100:
+      KL_temperature: 1.0
+      lr: 0.0001
+      epochs: 1
+
+
+# ---------------------------------------------------------------------------
+# 9. BOUNDARYSHRINK  (Boundary Unlearning — Shrink variant)
+# ---------------------------------------------------------------------------
+BOUNDARYSHRINK:
+  paper: "Chen et al., 'Boundary Unlearning: Rapid Forgetting of Deep Networks via Shifting the Decision Boundary', CVPR 2023"
+  repo: "https://github.com/if-loops/Boundary-Unlearning-Code (fork)"
+  notes: >
+    Uses adversarial perturbations (FGSM) to push forget-class samples
+    towards the decision boundary, then fine-tunes.
+  general:
+    # Adversarial perturbation
+    eps: 0.031372549               # 8/255 ≈ 0.0314 (paper — FGSM L∞ bound)
+    # Fine-tuning
+    lr: 0.00001                    # (paper — SGD)
+    momentum: 0.9                  # (paper)
+    epochs: 10                     # (paper)
+    optimizer: "SGD"
+  per_setting:
+    resnet18_CIFAR10:
+      eps: 0.031372549             # 8/255
+      lr: 0.00001
+      epochs: 10
+    resnet18_MNIST:
+      eps: 0.1                     # FGSM eps from boundary_unlearning.py
+      lr: 0.00001
+      epochs: 10
+
+
+# ---------------------------------------------------------------------------
+# 10. BOUNDARYEXPAND  (Boundary Unlearning — Expand variant)
+# ---------------------------------------------------------------------------
+BOUNDARYEXPAND:
+  paper: "Chen et al., 'Boundary Unlearning: Rapid Forgetting of Deep Networks via Shifting the Decision Boundary', CVPR 2023"
+  repo: "https://github.com/if-loops/Boundary-Unlearning-Code (fork)"
+  notes: >
+    Trains a narrower "expand" model on retain data to replace the
+    original's decision boundary.  No adversarial perturbation needed.
+  general:
+    lr: 0.00001                    # (paper — SGD)
+    momentum: 0.9
+    epochs: 10                     # (paper)
+    filter_percentage: 0.5         # narrow model width ratio (paper)
+    optimizer: "SGD"
+  per_setting:
+    resnet18_CIFAR10:
+      lr: 0.00001
+      epochs: 10
+
+
+# ---------------------------------------------------------------------------
+# 11. SCRUB  (Stochastic Gradient Descent-Ascent)
+# ---------------------------------------------------------------------------
+SCRUB:
+  paper: "Kurmanji et al., 'Towards Unbounded Machine Unlearning', NeurIPS 2023"
+  repo: "https://github.com/meghdadk/SCRUB"
+  notes: >
+    Alternates gradient ascent on forget data (maximize KD loss) for
+    msteps epochs, then gradient descent on retain data (minimize KD
+    loss) for the remaining epochs.  Uses SWA for stability.
+  general:
+    alpha: 0.5                     # KD loss weight (paper)
+    gamma: 1.0                     # label smoothing / forget weight (paper)
+    msteps: 3                      # number of maximize (ascent) epochs (paper)
+    kd_T: 4.0                      # KD temperature (paper)
+    smoothing: 0.0                 # label smoothing disabled
+    sstart: 10                     # SWA start epoch
+    optimizer: "SGD"
+    sgda_epochs: 5                 # (paper — MIA experiment setting)
+    sgda_learning_rate: 0.0005     # (paper)
+    weight_decay: 0.0005           # (paper)
+    momentum: 0.9                  # (paper)
+    lr_decay_rate: 0.1             # (paper)
+    lr_decay_epochs: [3, 5, 9]     # (paper — MIA experiments)
+    clip: 0.2                      # gradient clipping (paper)
+    batch_size: 128                # (paper)
+  per_setting:
+    # --- ResNet + CIFAR-Super20 (MIA experiments notebook) ---
+    resnet18_CIFAR10:
+      alpha: 0.5
+      gamma: 1.0
+      msteps: 3
+      kd_T: 4.0
+      sgda_epochs: 5
+      sgda_learning_rate: 0.0005
+      lr_decay_epochs: [3, 5, 9]
+      weight_decay: 0.0005
+    # --- ResNet + CIFAR-100 / large scale ---
+    resnet18_CIFAR100:
+      alpha: 0.01
+      gamma: 1.0
+      msteps: 2
+      kd_T: 2.0
+      sgda_epochs: 10
+      sgda_learning_rate: 0.0005
+      lr_decay_epochs: [7, 10, 10]
+      weight_decay: 0.0005
+    # --- ResNet50 + CIFAR-100 ---
+    resnet50_CIFAR100:
+      alpha: 0.5
+      gamma: 1.0
+      msteps: 5
+      kd_T: 4.0
+      sgda_epochs: 5
+      sgda_learning_rate: 0.0005
+      lr_decay_epochs: [5, 5, 9]
+      weight_decay: 0.0005
+      optimizer: "Adam"
+
+
+# ---------------------------------------------------------------------------
+# 12. RANDOMLABEL  (Amnesiac Unlearning)
+# ---------------------------------------------------------------------------
+RANDOMLABEL:
+  paper: "Graves et al., 'Amnesiac Machine Learning', AAAI 2021"
+  notes: >
+    Replaces forget-class labels with random labels drawn uniformly
+    from the remaining classes, then fine-tunes.
+  general:
+    retain_fraction: 0.0           # fraction of retain data mixed in (0 = forget only)
+    optimizer: "AdamW"
+    lr: 0.0001                     # (from paper notebook)
+    epochs: 3                      # (from paper notebook — CIFAR-Super20)
+    batch_size: 256
+  per_setting:
+    resnet18_CIFAR10:
+      retain_fraction: 0.0
+      lr: 0.0001
+      epochs: 3
+    resnet18_CIFAR100:
+      retain_fraction: 0.0
+      lr: 0.0001
+      epochs: 3
+
+
+# ---------------------------------------------------------------------------
+# 13. FISHERFORGETTING  (Fisher Forgetting)
+# ---------------------------------------------------------------------------
+FISHERFORGETTING:
+  paper: "Golatkar et al., 'Eternal Sunshine of the Spotless Net: Selective Forgetting in Deep Networks', CVPR 2020"
+  notes: >
+    Adds Fisher-information-weighted Gaussian noise to model parameters.
+    noise_scale controls magnitude; alpha provides L2 regularisation.
+  general:
+    noise_scale: 1.0               # scaling factor for noise injection
+    alpha: 0.000001                # 1e-6 — L2 regularisation strength
+  per_setting:
+    # The paper originally experiments with AllCNN on CIFAR-10/100.
+    resnet18_CIFAR10:
+      noise_scale: 1.0
+      alpha: 0.000001
+    resnet18_CIFAR100:
+      noise_scale: 1.0
+      alpha: 0.000001
+
+
+# ---------------------------------------------------------------------------
+# 14. SFU  (Source-Free Unlearning)
+# ---------------------------------------------------------------------------
+SFU:
+  paper: "Ahmed et al., 'Towards Source-Free Machine Unlearning', CVPR 2025"
+  repo: "https://github.com/UCR-Vision-and-Learning-Group/source-free-unlearning"
+  notes: >
+    Linearises the model and uses Hessian-based influence removal
+    (Newton step on the Fisher) to unlearn without access to original
+    training data.  'damping' stabilises the Hessian inverse; 'scale'
+    controls the Newton-step magnitude.
+  general:
+    damping: 0.0001                # 1e-4 — Hessian damping factor
+    scale: 1.0                     # Newton-step scale
+    weight_decay: 0.0005           # (paper)
+    # The paper's pipeline uses SGD(lr=0.05, momentum=0.9) for the
+    # linearised mixed-privacy model, and SGD(lr=0.001, momentum=0.999)
+    # for the influence vector v.
+  per_setting:
+    resnet18_CIFAR10:
+      damping: 0.0001
+      scale: 1.0
+    resnet50_CIFAR10:
+      damping: 0.0001
+      scale: 1.0
+
+
+# ---------------------------------------------------------------------------
+# 15. UNSIR  (Unlearning with Noise-Impair-Repair)
+# ---------------------------------------------------------------------------
+UNSIR:
+  paper: "Tarun et al., 'Fast Yet Effective Machine Unlearning', IEEE TNNLS 2024"
+  repo: "https://github.com/vikram2000b/Fast-Machine-Unlearning"
+  notes: >
+    Three-stage method:
+      1) Noise optimisation: learns a noise tensor per forget class that
+         maximises CE loss + L2 regularisation.
+      2) Impair: trains on noisy forget data + retain data to confuse the
+         model on the forget class.
+      3) Repair: fine-tunes on retain data only to recover accuracy.
+  general:
+    noise_batch_size: 256          # (paper)
+    noise_epochs: 250              # (paper — notebook uses 250)
+    noise_steps: 8                 # (our config — original does 1 update/epoch)
+    noise_lr: 0.1                  # Adam lr for noise optimisation (paper)
+    noise_reg: 0.1                 # L2 regularisation on noise (paper)
+    num_noise_batches: 80          # (paper — 80 batches of noise in loader)
+    impair_epochs: 1               # (paper)
+    impair_lr: 0.0001              # (paper — from notebook)
+    repair_epochs: 1               # (paper)
+    repair_lr: 0.0001              # (paper — from notebook)
+    batch_size: 256                # (paper)
+    optimizer: "Adam"              # (paper — for impair/repair steps)
+  per_setting:
+    # Original paper: ResNet18 on CIFAR-Super20 (CIFAR-100 grouped into 20)
+    resnet18_CIFAR10:
+      noise_batch_size: 256
+      noise_epochs: 250
+      noise_lr: 0.1
+      noise_reg: 0.1
+      num_noise_batches: 80
+      impair_lr: 0.0001
+      impair_epochs: 1
+      repair_lr: 0.0001
+      repair_epochs: 1
+    resnet18_CIFAR100:
+      noise_batch_size: 256
+      noise_epochs: 250
+      noise_lr: 0.1
+      noise_reg: 0.1
+      num_noise_batches: 80
+      impair_lr: 0.0001
+      impair_epochs: 1
+      repair_lr: 0.0001
+      repair_epochs: 1
+    vit_b_16_CIFAR10:
+      noise_batch_size: 256
+      noise_epochs: 250
+      noise_lr: 0.1
+      noise_reg: 0.1
+      num_noise_batches: 80
+      impair_lr: 0.0001
+      impair_epochs: 1
+      repair_lr: 0.0001
+      repair_epochs: 1
+
+
+# ---------------------------------------------------------------------------
+# 16. ISPF  (Inhibited Synthetic + PostFilter — Data-Free KD)
+# ---------------------------------------------------------------------------
+ISPF:
+  paper: "Xie et al., 'ISPF: A Data-Free Approach for Class Unlearning', AAAI 2025"
+  repo: "https://github.com/ChildEden/ISPF"
+  notes: >
+    Data-free unlearning via knowledge distillation with a generator.
+    The generator creates synthetic images; the IS (Inhibited Synthetic)
+    strategy flips the KL sign on forget columns during generator training
+    to avoid generating forget-class samples.  PF (PostFilter) redistributes
+    the teacher's forget-class logits to retain classes during student
+    distillation.  Strategy "IS_PF" combines both.
+  general:
+    nz: 256                        # latent noise dimension (paper)
+    ngf: 64                        # generator feature map base (paper)
+    g_steps: 1                     # generator update steps per outer iter (paper script)
+    kd_steps: 10                   # KD update steps per outer iter (paper script)
+    ep_steps: 50                   # total outer iterations per epoch (paper script)
+    lr_g: 0.001                    # Adam lr for generator (paper)
+    lr_s: 0.05                     # SGD lr for student (paper script)
+    lr_decay_milestones: "120,150,180"  # (paper script — for student lr schedule)
+    synthesis_bs: 256              # synthesis batch size (paper)
+    kd_T: 1.0                      # KD temperature (paper script: T=1)
+    pf_threshold: 0.01             # PostFilter threshold (paper)
+    adv: 1.0                       # adversarial loss weight (paper)
+    oh: 1.0                        # one-hot CE loss weight (paper)
+    bn: 1.0                        # BN regularisation weight (paper)
+    warmup: 2                      # warmup epochs before KD (paper script)
+    epochs: 200                    # total training epochs (paper script)
+    strategy: "IS_PF"              # recommended strategy (paper)
+    optimizer_student: "SGD"
+    momentum: 0.9
+    weight_decay: 0.0005
+  per_setting:
+    # --- AllCNN on CIFAR-10 (original paper setting) ---
+    allcnn_CIFAR10:
+      lr_s: 0.05
+      epochs: 200
+      warmup: 2
+      kd_steps: 10
+      ep_steps: 50
+      g_steps: 1
+      lr_g: 0.001
+      nz: 256
+      adv: 1.0
+      T: 1.0
+      bn: 1.0
+      oh: 1.0
+      pf_threshold: 0.01
+      strategy: "IS_PF"
+    # --- CIFAR-100 (paper notes different threshold) ---
+    allcnn_CIFAR100:
+      lr_s: 0.05
+      epochs: 200
+      warmup: 2
+      kd_steps: 10
+      ep_steps: 50
+      g_steps: 1
+      lr_g: 0.001
+      nz: 256
+      adv: 1.0
+      T: 1.0
+      bn: 1.0
+      oh: 1.0
+      pf_threshold: 0.001          # Lower threshold for CIFAR-100 (paper)
+      strategy: "IS_PF"
+    # --- Adapted for our architectures (suggested starting points) ---
+    resnet18_CIFAR10:
+      lr_s: 0.05
+      epochs: 200
+      warmup: 2
+      kd_steps: 10
+      g_steps: 1
+      lr_g: 0.001
+      nz: 256
+      kd_T: 1.0
+      pf_threshold: 0.01
+      strategy: "IS_PF"
+    resnet18_CIFAR100:
+      lr_s: 0.05
+      epochs: 200
+      warmup: 2
+      kd_steps: 10
+      g_steps: 1
+      lr_g: 0.001
+      nz: 256
+      kd_T: 1.0
+      pf_threshold: 0.001
+      strategy: "IS_PF"
+    vit_b_16_CIFAR10:
+      lr_s: 0.05
+      epochs: 200
+      warmup: 2
+      kd_steps: 10
+      g_steps: 1
+      lr_g: 0.001
+      nz: 256
+      kd_T: 1.0
+      pf_threshold: 0.01
+      strategy: "IS_PF"
+    vit_b_16_CIFAR100:
+      lr_s: 0.05
+      epochs: 200
+      warmup: 2
+      kd_steps: 10
+      g_steps: 1
+      lr_g: 0.001
+      nz: 256
+      kd_T: 1.0
+      pf_threshold: 0.001
+      strategy: "IS_PF"
+
+
+# =============================================================================
+# QUICK REFERENCE — Default CLI arguments for our framework
+# =============================================================================
+#
+# Method           | Key args & defaults
+# -----------------+----------------------------------------------------------
+# EWC              | --lambda-ewc 1.0  --ewc-coefficients FISHER
+# SSD              | --SSD-lambda 1.0  --SSD-alpha 10.0  --SSD-coefficients FISHER
+# DELETE           | --freeze-delete nofreeze
+# BADTEACHER       | --bt-temperature 1.0
+# BOUNDARYSHRINK   | --boundary-eps 0.031372549
+# BOUNDARYEXPAND   | (no method-specific args beyond lr)
+# SCRUB            | --scrub-alpha 0.5  --scrub-gamma 1.0  --scrub-msteps 3
+#                  | --scrub-kd-T 4.0  --scrub-smoothing 0.0  --scrub-sstart 10
+# RANDOMLABEL      | --rl-retain-fraction 0.0
+# FISHERFORGETTING | --ff-noise-scale 1.0  --ff-alpha 1e-6
+# SFU              | --sfu-damping 1e-4  --sfu-scale 1.0
+# UNSIR            | --unsir-noise-batch-size 256  --unsir-noise-epochs 5
+#                  | --unsir-noise-lr 0.1  --unsir-noise-reg 0.1
+#                  | --unsir-impair-lr 0.02  --unsir-repair-lr 0.01
+# ISPF             | --ispf-nz 256  --ispf-ngf 64  --ispf-g-steps 5
+#                  | --ispf-kd-steps 400  --ispf-lr-g 1e-3  --ispf-lr-s 2e-3
+#                  | --ispf-kd-T 20.0  --ispf-pf-threshold 0.01
+#                  | --ispf-adv 1.0  --ispf-oh 1.0  --ispf-bn 10.0
+# SCAR             | --scar-temperature 1.0  --scar-lambda-1 1.0
+#                  | --scar-lambda-2 5.0  --scar-gamma1 5.0
+#                  | --scar-gamma2 5.0  --scar-delta 5.0
+#                  | --scar-num-retain-samp 5
+# NOISY            | (many flags — see config/parser.py)
+# DISTRIBUTIONAL   | --information-criterion bic  (+ NOISY args)
+# RETRAIN          | (no method-specific args)
+# =============================================================================
